@@ -80,6 +80,7 @@ func getFolders(client *fasthttp.Client, cookies *cookiejar.CookieJar) (items []
 }
 
 var htmlescapecodes = []string{
+	"&#191;", "a",
 	"&#193;", "A",
 	"&#241;", "ny",
 	"&#225;", "a",
@@ -102,6 +103,7 @@ func formatName(s string) string {
 }
 
 var (
+	rdir  = regexp.MustCompile(`<div class="columna2">(.*?)</div>`)
 	rname = regexp.MustCompile(`class="nombre" >(.*?)</span>`)
 	rid   = regexp.MustCompile(`<div class="columna1">(.*?)</div>`)
 )
@@ -110,54 +112,74 @@ func do(
 	p *pb.ProgressBar, client *fasthttp.Client,
 	cookies *cookiejar.CookieJar, item *uaitem,
 ) {
-	args := fasthttp.AcquireArgs()
-	req, res := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseArgs(args)
-	defer fasthttp.ReleaseRequest(req)
-	defer fasthttp.ReleaseResponse(res)
-
-	args.Set("idmat", "-1")
-	args.Set("codasi", item.cod)
-	args.Set("expresion", "")
-	args.Set("direccion", "")
-	args.Set("filtro", "")
-	args.Set("pendientes", "N")
-	args.Set("fechadesde", "")
-	args.Set("fechahasta", "")
-	args.Set("busquedarapida", "N")
-	args.Set("idgrupo", "")
-
-	args.WriteTo(req.BodyWriter())
-
-	req.Header.SetContentType("application/x-www-form-urlencoded; charset=UTF-8")
-	req.Header.SetMethod("POST")
-	req.SetRequestURI(urlFiles)
-
-	err := doReqFollowRedirects(req, res, client, cookies)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	body := res.Body()
-
+	mainItem := item
 	name := formatName(item.name)
 	os.MkdirAll(*output+"/"+name, 0777)
 
-	idMatch := rid.FindAllSubmatch(body, -1)
-	nameMatch := rname.FindAllSubmatch(body, -1)
-	for i := 0; i < len(idMatch); i++ {
-		for j := 1; j < len(idMatch[i]); j++ {
-			item.items = append(item.items, &uaitem{
-				cod:  string(idMatch[i][j]),
-				name: string(nameMatch[i][j]),
-			})
+	dirs := append([]uaitem{}, uaitem{cod: "-1", name: "./"})
+	for inc := 0; inc < len(dirs); inc++ {
+		args := fasthttp.AcquireArgs()
+		req, res := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
+
+		args.Set("idmat", dirs[inc].cod)
+		args.Set("codasi", item.cod)
+		args.Set("expresion", "")
+		args.Set("direccion", "")
+		args.Set("filtro", "")
+		args.Set("pendientes", "N")
+		args.Set("fechadesde", "")
+		args.Set("fechahasta", "")
+		args.Set("busquedarapida", "N")
+		args.Set("idgrupo", "")
+
+		args.WriteTo(req.BodyWriter())
+
+		req.Header.SetContentType("application/x-www-form-urlencoded; charset=UTF-8")
+		req.Header.SetMethod("POST")
+		req.SetRequestURI(urlFiles)
+
+		err := doReqFollowRedirects(req, res, client, cookies)
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
+		body := res.Body()
+
+		fasthttp.ReleaseArgs(args)
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(res)
+
+		idMatch := rid.FindAllSubmatch(body, -1)
+		nameMatch := rname.FindAllSubmatch(body, -1)
+		dirMatch := rdir.FindAllSubmatch(body, -1)
+		for i := 0; i < len(idMatch); i++ {
+		sloop:
+			for j := 1; j < len(idMatch[i]); j += 2 {
+				cod := string(idMatch[i][j])
+				name := string(nameMatch[i][j])
+				if len(dirMatch[i][j]) == 0 {
+					dirs = append(dirs, uaitem{
+						cod: cod, name: fmt.Sprintf("%s/%s", dirs[inc].name, name),
+					})
+					continue sloop
+				}
+				item.items = append(item.items, &uaitem{
+					cod:  cod,
+					name: fmt.Sprintf("%s/%s", dirs[inc].name, name),
+				})
+			}
+		}
+
+		// deleting processed dir
+		dirs = dirs[1:]
+		inc--
 	}
+	dirs = nil
 	p.Total = int64(len(item.items))
 	p.ShowPercent = true
 	p.Prefix(formatName(item.name))
 	if p.Total != 0 {
-		download(p, client, cookies, item)
+		download(p, client, cookies, mainItem)
 	}
 }
 
@@ -208,6 +230,8 @@ func download(
 					to += ".zip"
 				}
 			}
+
+			os.MkdirAll(path.Dir(to), 0777)
 
 			ioutil.WriteFile(to, res.Body(), 0644)
 			if dst != "" {
