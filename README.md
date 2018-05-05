@@ -1,6 +1,6 @@
 # UACloudAutoDownloader
 
-Download
+Installation
 ---------
 
 ```
