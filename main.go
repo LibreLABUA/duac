@@ -13,7 +13,8 @@ import (
 )
 
 var (
-	pool = pb.NewPool()
+	errors []error
+	pool   = pb.NewPool()
 
 	output = flag.String("o", "./files/", "Output directory")
 )
@@ -63,6 +64,15 @@ func main() {
 	pool.Start()
 	wg.Wait()
 	pool.Stop()
+
+	if len(errors) == 0 {
+		fmt.Println("No errors reported")
+	} else {
+		fmt.Println("Reported errors:")
+		for _, err := range errors {
+			fmt.Printf("\t- %s\n", err)
+		}
+	}
 }
 
 func b2s(b []byte) string {
