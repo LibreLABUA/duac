@@ -1,10 +1,8 @@
 package main
 
 import (
-	"archive/zip"
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -192,7 +190,6 @@ func download(
 	for n := range item.items {
 		wg.Add(1)
 		go func(i int) {
-			dst := ""
 			defer wg.Done()
 
 			args := fasthttp.AcquireArgs()
@@ -226,7 +223,6 @@ func download(
 				if !strings.Contains(
 					path.Ext(to), ".zip",
 				) {
-					dst = to
 					to += ".zip"
 				}
 			}
@@ -234,49 +230,9 @@ func download(
 			os.MkdirAll(path.Dir(to), 0777)
 
 			ioutil.WriteFile(to, res.Body(), 0644)
-			if dst != "" {
-				// Does not work well with the f*cking UA rare compressed files
-				//uncompress(to, dst)
-			}
 			p.Add(1)
 		}(n)
 	}
 	wg.Wait()
 	p.Finish()
-}
-
-func uncompress(src, dst string) {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		errors = append(errors, err)
-		return
-	}
-	defer r.Close()
-
-	os.MkdirAll(dst, 0777)
-
-	// Iterate through the files in the archive,
-	for _, f := range r.File {
-		srcFile, err := f.Open()
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		dstFile, err := os.Create(
-			fmt.Sprintf("%s/%s", dst, formatName(f.Name)),
-		)
-		if err != nil {
-			errors = append(errors, err)
-			goto next
-		}
-
-		_, err = io.Copy(dstFile, srcFile)
-		if err != nil {
-			errors = append(errors, err)
-		}
-	next:
-		srcFile.Close()
-		dstFile.Close()
-	}
 }
