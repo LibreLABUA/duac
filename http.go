@@ -12,10 +12,13 @@ func doReqFollowRedirects(
 	client *fasthttp.Client, cookies *cookiejar.CookieJar) (err error) {
 
 	var url, body []byte
+	var status int
 	var referer string
-	// use compression!!!11!
-	req.Header.Add("Accept-Encoding", "gzip")
 	for {
+		// use compression!!!11!
+		// compression is better. Compress your life :')
+		req.Header.Add("Accept-Encoding", "gzip")
+
 		if referer != "" {
 			req.Header.Add("Referer", referer)
 		}
@@ -29,12 +32,8 @@ func doReqFollowRedirects(
 		// reading cookies from the response
 		cookies.ResponseCookies(res)
 
-		status := res.Header.StatusCode()
-		if status != fasthttp.StatusMovedPermanently &&
-			status != fasthttp.StatusFound &&
-			status != fasthttp.StatusSeeOther &&
-			status != fasthttp.StatusTemporaryRedirect &&
-			status != fasthttp.StatusPermanentRedirect {
+		status = res.Header.StatusCode()
+		if status < 300 { // no redirect or error
 			break
 		}
 
@@ -47,18 +46,24 @@ func doReqFollowRedirects(
 		res.Reset()
 
 		req.SetRequestURIBytes(url)
-		req.Header.SetMethod("GET")
-		req.Header.Add("Accept-Encoding", "gzip")
 	}
-	if res.Header.StatusCode() == 401 {
+	switch status {
+	case fasthttp.StatusOK:
+	case fasthttp.StatusUnauthorized:
 		err = fmt.Errorf("Incorrect password")
+		goto end
+	default:
+		err = fmt.Errorf("error server returned status code %d", status)
 		goto end
 	}
 
 	body = res.Body()
 	if len(res.Header.Peek("Content-Encoding")) != 0 {
 		// gunzipping
-		fasthttp.AppendGunzipBytes(body, body)
+		_, err = fasthttp.AppendGunzipBytes(body, body)
+		if err != nil {
+			panic(err)
+		}
 		res.SetBody(body)
 	}
 

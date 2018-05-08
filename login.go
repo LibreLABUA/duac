@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"regexp"
-	"time"
 
 	"github.com/c2h5oh/datasize"
 	"github.com/erikdubbelboer/fasthttp"
@@ -22,7 +21,7 @@ func login(user, pass string) (*fasthttp.Client, *cookiejar.CookieJar, error) {
 	}
 
 	// Be patient... UA's webpage is written in C#
-	status, body, err := client.GetTimeout(nil, urlNormal, time.Second*15)
+	status, body, err := client.Get(nil, urlNormal)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -39,7 +38,6 @@ func login(user, pass string) (*fasthttp.Client, *cookiejar.CookieJar, error) {
 	// reusing body as much as possible
 	// submatch is the latest parameter so we take len-1
 	body = append(body[:0], execp[len(execp)-1]...)
-	execp = nil
 
 	// getting request, response and arguments for post request
 	args := fasthttp.AcquireArgs()
@@ -48,8 +46,6 @@ func login(user, pass string) (*fasthttp.Client, *cookiejar.CookieJar, error) {
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(res)
 
-	// compression is better. Compress your life :')
-	req.Header.Add("Accept-Encoding", "gzip")
 	req.Header.SetContentType("application/x-www-form-urlencoded")
 	req.Header.SetMethod("POST")
 
