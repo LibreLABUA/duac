@@ -8,7 +8,6 @@ import (
 	"path"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/cheggaaa/pb"
 	"github.com/erikdubbelboer/fasthttp"
@@ -185,54 +184,47 @@ func download(
 	p *pb.ProgressBar, client *fasthttp.Client,
 	cookies *cookiejar.CookieJar, item *uaitem,
 ) {
-	var wg sync.WaitGroup
 	p.Start()
-	for n := range item.items {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+	for i := range item.items {
+		args := fasthttp.AcquireArgs()
+		req, res := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
+		defer fasthttp.ReleaseArgs(args)
+		defer fasthttp.ReleaseRequest(req)
+		defer fasthttp.ReleaseResponse(res)
 
-			args := fasthttp.AcquireArgs()
-			req, res := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
-			defer fasthttp.ReleaseArgs(args)
-			defer fasthttp.ReleaseRequest(req)
-			defer fasthttp.ReleaseResponse(res)
+		args.Set("identificadores", item.items[i].cod)
+		args.Set("codasis", item.cod)
 
-			args.Set("identificadores", item.items[i].cod)
-			args.Set("codasis", item.cod)
+		req.SetRequestURI(urlDownload)
+		req.Header.SetContentType("application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.SetMethod("POST")
 
-			req.SetRequestURI(urlDownload)
-			req.Header.SetContentType("application/x-www-form-urlencoded")
-			req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8")
-			req.Header.Set("Accept-Encoding", "gzip")
-			req.Header.SetMethod("POST")
+		args.WriteTo(req.BodyWriter())
 
-			args.WriteTo(req.BodyWriter())
+		from := item.items[i].name
+		to := formatName(
+			fmt.Sprintf("%s/%s/%s", *output, item.name, from),
+		)
 
-			from := item.items[i].name
-			to := formatName(
-				fmt.Sprintf("%s/%s/%s", *output, item.name, from),
-			)
-
-			err := doReqFollowRedirects(req, res, client, cookies)
-			if err != nil {
-				p.Add(1)
-				errors = append(errors, err)
-			}
-			if bytes.Equal(res.Header.ContentType(), []byte("application/zip")) {
-				if !strings.Contains(
-					path.Ext(to), ".zip",
-				) {
-					to += ".zip"
-				}
-			}
-
-			os.MkdirAll(path.Dir(to), 0777)
-
-			ioutil.WriteFile(to, res.Body(), 0644)
+		err := doReqFollowRedirects(req, res, client, cookies)
+		if err != nil {
 			p.Add(1)
-		}(n)
+			errors = append(errors, err)
+		}
+		if bytes.Equal(res.Header.ContentType(), []byte("application/zip")) {
+			if !strings.Contains(
+				path.Ext(to), ".zip",
+			) {
+				to += ".zip"
+			}
+		}
+
+		os.MkdirAll(path.Dir(to), 0777)
+
+		ioutil.WriteFile(to, res.Body(), 0644)
+		p.Add(1)
 	}
-	wg.Wait()
 	p.Finish()
 }
