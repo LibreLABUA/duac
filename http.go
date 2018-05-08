@@ -20,7 +20,7 @@ func doReqFollowRedirects(
 			req.Header.Add("Referer", referer)
 		}
 		// writting cookies to request
-		cookies.WriteToRequest(req)
+		cookies.AddToRequest(req)
 
 		err = client.Do(req, res)
 		if err != nil {
