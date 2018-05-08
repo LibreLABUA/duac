@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -188,9 +187,6 @@ func download(
 	for i := range item.items {
 		args := fasthttp.AcquireArgs()
 		req, res := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
-		defer fasthttp.ReleaseArgs(args)
-		defer fasthttp.ReleaseRequest(req)
-		defer fasthttp.ReleaseResponse(res)
 
 		args.Set("identificadores", item.items[i].cod)
 		args.Set("codasis", item.cod)
@@ -202,6 +198,7 @@ func download(
 		req.Header.SetMethod("POST")
 
 		args.WriteTo(req.BodyWriter())
+		fasthttp.ReleaseArgs(args)
 
 		from := item.items[i].name
 		to := formatName(
@@ -210,9 +207,9 @@ func download(
 
 		err := doReqFollowRedirects(req, res, client, cookies)
 		if err != nil {
-			p.Add(1)
 			errors = append(errors, err)
 		}
+		p.Add(1)
 		if bytes.Equal(res.Header.ContentType(), []byte("application/zip")) {
 			if !strings.Contains(
 				path.Ext(to), ".zip",
@@ -220,11 +217,19 @@ func download(
 				to += ".zip"
 			}
 		}
-
 		os.MkdirAll(path.Dir(to), 0777)
 
-		ioutil.WriteFile(to, res.Body(), 0644)
-		p.Add(1)
+		file, err := os.Create(to)
+		if err != nil {
+			errors = append(errors, err)
+			return
+		}
+
+		res.BodyWriteTo(file)
+		file.Close()
+
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(res)
 	}
 	p.Finish()
 }
