@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/c2h5oh/datasize"
 	"github.com/erikdubbelboer/fasthttp"
 	"github.com/themester/fcookiejar"
 )
 
 var (
+	MB = 1024 * 1024 * 1024
 	// regex execution parameter
 	regexep = regexp.MustCompile(`name="execution"\svalue="(.*?)"`)
 )
@@ -17,7 +17,7 @@ var (
 func login(user, pass string) (*fasthttp.Client, *cookiejar.CookieJar, error) {
 	client := &fasthttp.Client{
 		Name:                "Pakillo 4.20",
-		MaxResponseBodySize: int(datasize.MB) * 100, // 100 mb of download files
+		MaxResponseBodySize: MB * 100, // 100 mb of download files
 	}
 
 	// Be patient... UA's webpage is written in C#

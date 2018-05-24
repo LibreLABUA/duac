@@ -67,11 +67,12 @@ func main() {
 
 	if len(errors) == 0 {
 		fmt.Println("No errors reported")
-	} else {
-		fmt.Println("Reported errors:")
-		for _, err := range errors {
-			fmt.Printf("\t- %s\n", err)
-		}
+		return
+	}
+
+	fmt.Println("Reported errors:")
+	for _, err := range errors {
+		fmt.Printf("\t- %s\n", err)
 	}
 }
 

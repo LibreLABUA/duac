@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/erikdubbelboer/fasthttp"
@@ -33,10 +34,9 @@ func doReqFollowRedirects(
 		cookies.ResponseCookies(res)
 
 		status = res.Header.StatusCode()
-		if status < 300 { // no redirect or error
+		if status < 300 || status > 399 { // no redirect
 			break
 		}
-
 		referer, url = string(url), res.Header.Peek("Location")
 		if len(url) == 0 {
 			err = fmt.Errorf("Status code is redirect (%d) but no one location have been provided", status)
@@ -56,9 +56,8 @@ func doReqFollowRedirects(
 		err = fmt.Errorf("error server returned status code %d", status)
 		goto end
 	}
-
 	body = res.Body()
-	if len(res.Header.Peek("Content-Encoding")) != 0 {
+	if bytes.Equal(res.Header.Peek("Content-Encoding"), []byte("gzip")) {
 		// gunzipping
 		_, err = fasthttp.AppendGunzipBytes(body, body)
 		if err != nil {
@@ -66,7 +65,6 @@ func doReqFollowRedirects(
 		}
 		res.SetBody(body)
 	}
-
 end:
 	return err
 }
