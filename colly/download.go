@@ -84,7 +84,7 @@ func formatName(s string) string {
 }
 
 var (
-	rdir  = regexp.MustCompile(`<div class="columna2">(.*?)</div>`)
+	rdir  = regexp.MustCompile(`<div class="(.*?)" data-id`)
 	rname = regexp.MustCompile(`class="nombre" >(.*?)</span>`)
 	rid   = regexp.MustCompile(`<div class="columna1">(.*?)</div>`)
 )
@@ -104,6 +104,12 @@ func do(p *pb.ProgressBar, c colly.Collector, item *uaitem) {
 			for i := 0; i < len(idMatch); i++ {
 			sloop:
 				for j := 1; j < len(idMatch[i]); j += 2 {
+					folder := strings.Contains(string(dirMatch[i][j]), "carpeta")
+					if !folder {
+						if !strings.Contains(string(dirMatch[i][j]), "archivo") {
+							continue
+						}
+					}
 					cod := string(idMatch[i][j])
 					name := string(nameMatch[i][j])
 					if len(dirMatch[i][j]) == 0 {
