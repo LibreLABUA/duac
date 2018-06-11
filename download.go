@@ -14,14 +14,16 @@ import (
 )
 
 type uaitem struct {
-	cod   string
-	name  string
-	items []*uaitem
+	cod    string
+	name   string
+	items  []*uaitem
+	folder bool
 }
 
 var (
 	rcod  = regexp.MustCompile(`data-codasi="(.*?)"`)
 	rasig = regexp.MustCompile(`<span class="asi">(.*?)</span>`)
+	rfold = regexp.MustCompile(`<div class="(.*?)" data-id`)
 )
 
 func getFolders(client *fasthttp.Client, cookies *cookiejar.CookieJar) (items []*uaitem) {
@@ -62,12 +64,14 @@ func getFolders(client *fasthttp.Client, cookies *cookiejar.CookieJar) (items []
 	body := res.Body()
 	codeMatch := rcod.FindAllSubmatch(body, -1)
 	nameMatch := rasig.FindAllSubmatch(body, -1)
+	foldMatch := rfold.FindAllSubmatch(body, -1)
 	// ignoring first
 	for i := 0; i < len(codeMatch) && i < len(nameMatch); i++ {
 		for j := 1; j < len(codeMatch[i]) && j < len(nameMatch[i]); j += 2 {
 			items = append(items, &uaitem{
-				cod:  string(codeMatch[i+1][j]),
-				name: string(nameMatch[i][j]),
+				folder: strings.Contains(string(foldMatch[i][j]), "carpeta"),
+				cod:    string(codeMatch[i+1][j]),
+				name:   string(nameMatch[i][j]),
 			})
 		}
 	}
@@ -99,7 +103,7 @@ func formatName(s string) string {
 }
 
 var (
-	rdir  = regexp.MustCompile(`<div class="columna2">(.*?)</div>`)
+	rdir  = regexp.MustCompile(`<div class="(.*?)" data-id`)
 	rname = regexp.MustCompile(`class="nombre" >(.*?)</span>`)
 	rid   = regexp.MustCompile(`<div class="columna1">(.*?)</div>`)
 )
@@ -151,9 +155,15 @@ func do(
 		for i := 0; i < len(idMatch); i++ {
 		sloop:
 			for j := 1; j < len(idMatch[i]); j += 2 {
+				folder := strings.Contains(string(dirMatch[i][j]), "carpeta")
+				if !folder {
+					if !strings.Contains(string(dirMatch[i][j]), "archivo") {
+						continue
+					}
+				}
 				cod := string(idMatch[i][j])
 				name := string(nameMatch[i][j])
-				if len(dirMatch[i][j]) == 0 {
+				if folder {
 					dirs = append(dirs, uaitem{
 						cod: cod, name: fmt.Sprintf("%s/%s", dirs[inc].name, name),
 					})
